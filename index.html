@@ -1679,7 +1679,7 @@ function browse(){
 
 /* ---- AI question generator ---- */
 function generate(){
-  if(!S.key){app.innerHTML=`<h2>Add your API key first</h2><p class="sub">Go to Settings and paste your Anthropic API key. It's stored only on this device.</p><button class="btn primary" id="go">Open settings</button>`;$("go").onclick=browse;return}
+  if(!S.key){app.innerHTML=`<h2>Add your API key first</h2><p class="sub">Go to Settings and paste your Anthropic API key. It's stored only on this device.</p><button class="btn primary" id="go">Open settings</button><button class="btn ghost" id="bank">Browse my AI questions (${S.gen.length})</button><button class="btn ghost" id="back">Back</button>`;$("go").onclick=browse;$("bank").onclick=()=>aiBank();$("back").onclick=home;return}
   const counts=S.gen.reduce((m,q)=>{m[q.topic]=(m[q.topic]||0)+1;return m},{});
   app.innerHTML=`<h2>New AI questions</h2><p class="sub">Pick a Part 1 topic. Fresh scenarios every time, explained in plain language.</p>
     <p class="sub" style="margin-bottom:4px">Topic</p>
@@ -1697,10 +1697,12 @@ function generate(){
     <label style="display:flex;gap:10px;align-items:center;font-size:15px;margin-top:14px"><input type="checkbox" id="useirs" ${S.genIRS?"checked":""} style="width:20px;height:20px">Look up irs.gov while writing (slower, more accurate)</label>
     <button class="btn primary" id="go" style="margin-top:20px">Generate and practice</button>
     <button class="btn ghost" id="bulk">Build the whole bank (all 40 topics)</button>
+    <button class="btn ghost" id="bank">Browse my AI questions (${S.gen.length})</button>
     <button class="btn ghost" id="back">Back</button>
     <p class="sub" id="status" style="margin-top:16px"></p>`;
   $("back").onclick=home;
   $("bulk").onclick=bulkBuild;
+  $("bank").onclick=()=>aiBank();
   $("go").onclick=async()=>{
     const topic=$("topic").value.replace(/ \(\d+ saved\)$/,""),n=+$("n").value,lvl=$("lvl").value;
     S.genIRS=$("useirs").checked;save();
@@ -1714,6 +1716,40 @@ function generate(){
     }catch(e){$("status").textContent="Couldn't generate: "+e.message;$("go").disabled=false}
   };
 }
+/* ---- AI question bank browser ---- */
+function aiBank(topic,filter){
+  if(typeof topic!=="string")topic="";if(typeof filter!=="string")filter="";
+  const counts=S.gen.reduce((m,q)=>{m[q.topic]=(m[q.topic]||0)+1;return m},{});
+  const topics=Object.keys(counts).sort();
+  const f=filter.toLowerCase();
+  const rows=S.gen.map((q,i)=>({q,i})).filter(x=>(!topic||x.q.topic===topic)&&(!f||x.q.q.toLowerCase().includes(f)||x.q.why.toLowerCase().includes(f)));
+  app.innerHTML=`<h2>AI questions</h2><p class="sub">${S.gen.length} total across ${topics.length} topics. Tap a question to expand it.</p>
+    <select id="tsel" style="width:100%;font:16px var(--sans);padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:10px">
+      <option value="">All topics</option>${topics.map(t=>`<option ${t===topic?"selected":""}>${t} (${counts[t]})</option>`).join("")}
+    </select>
+    <input id="fsearch" placeholder="Search questions…" value="${esc(filter)}" style="width:100%;font:16px var(--sans);padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:10px">
+    ${rows.length?`<button class="btn primary" id="practice">Practice these ${rows.length}</button>`:`<p class="q">No questions match.</p>`}
+    ${rows.slice(0,200).map(({q,i})=>{const c=S.cards["g#"+i];return`<details style="border-bottom:1px solid var(--line);padding:10px 0"><summary style="font-family:var(--serif);font-size:16px;line-height:1.4;cursor:pointer">${esc(q.q)}</summary>
+      <div style="margin-top:8px;font-size:14px">${q.options.map((o,j)=>`<div style="padding:4px 0;color:${j===q.answer?"var(--green)":"var(--muted)"}">${j===q.answer?"✓ ":"○ "}${esc(o)}</div>`).join("")}
+      <p style="margin:8px 0 4px;font-family:var(--serif);font-size:15px">${esc(q.why)}</p>
+      <p class="sub" style="margin:0">${esc(q.topic)}${c?` · seen ${c.seen}, missed ${c.miss||0}`:" · not yet practiced"}</p>
+      <button data-del="${i}" style="background:none;border:0;color:var(--red);font:600 14px var(--sans);padding:6px 0">Delete</button></div></details>`}).join("")}
+    ${rows.length>200?`<p class="sub">Showing 200 of ${rows.length}. Narrow by topic or search.</p>`:""}
+    <button class="btn ghost" id="back" style="margin-top:20px">Back</button>`;
+  $("tsel").onchange=e=>aiBank(e.target.value.replace(/ \(\d+\)$/,""),$("fsearch").value);
+  $("fsearch").oninput=e=>{const v=e.target.value,pos=e.target.selectionStart;aiBank(topic,v);const s=$("fsearch");s.focus();s.setSelectionRange(pos,pos)};
+  $("back").onclick=home;
+  if(rows.length)$("practice").onclick=()=>runQuiz(shuffle(rows.map(({q,i})=>({q,i,title:q.topic,gen:true,review:true}))),()=>aiBank(topic,filter));
+  app.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.del;if(!confirm("Delete this question?"))return;
+    // remove and re-index card keys so later questions keep their history
+    S.gen.splice(i,1);
+    const nc={};Object.entries(S.cards).forEach(([k,v])=>{if(!k.startsWith("g#")){nc[k]=v;return}const n=+k.slice(2);if(n<i)nc[k]=v;else if(n>i)nc["g#"+(n-1)]=v});S.cards=nc;
+    if(S.flags){const nf={};Object.entries(S.flags).forEach(([k,v])=>{if(!k.startsWith("g#")){nf[k]=v;return}const n=+k.slice(2);if(n<i)nf[k]=v;else if(n>i)nf["g#"+(n-1)]=v});S.flags=nf}
+    save();aiBank(topic,filter);
+  });
+}
+
 /* ---- Bulk bank builder ---- */
 let bulkStop=false;
 function bulkBuild(){
