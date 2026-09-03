@@ -1525,6 +1525,7 @@ function home(){
     </div>
     ${next?`<div class="home-card"><h3>Next lesson</h3><p>${next.title}</p></div>`:``}
     <button class="btn primary" id="start">${due.length?`Start session (${due.length} review${due.length>1?"s":""} first)`:next?"Start lesson":"Review everything"}</button>
+    <button class="btn ghost" id="lessons">All lessons</button>
     <div class="grid2">
       <button class="btn ghost" id="mock">Mock exam</button>
       <button class="btn ghost" id="gen">AI questions</button>
@@ -1545,6 +1546,14 @@ function home(){
   $("forms").onclick=()=>formsRef("");
   $("mock").onclick=mockSetup;
   $("browse").onclick=browse;
+  $("lessons").onclick=lessonsList;
+}
+function lessonsList(){
+  app.innerHTML=`<h2>Lessons</h2><p class="sub">${Object.keys(S.done).length} of ${LESSONS.length} done. Tap any lesson to read it or redo the practice.</p><ul class="list">${
+    LESSONS.map((l,i)=>`<li><span>${i+1}. ${l.title}${S.done[l.id]?` <span class="done">✓</span>`:""}</span><button data-id="${l.id}">Open</button></li>`).join("")
+  }</ul><button class="btn ghost" id="back" style="margin-top:20px">Back</button>`;
+  app.querySelectorAll("[data-id]").forEach(b=>b.onclick=()=>lesson(LESSONS.find(l=>l.id===b.dataset.id)));
+  $("back").onclick=home;
 }
 
 /* ---- Forms reference ---- */
@@ -1635,10 +1644,8 @@ function runMock(items){
 }
 
 function browse(){
-  app.innerHTML=`<h2>Lessons</h2><p class="sub">Tap any lesson to read or redo it.</p><ul class="list">${
-    LESSONS.map(l=>`<li><span>${l.title}${S.done[l.id]?` <span class="done">✓</span>`:""}</span><button data-id="${l.id}">Open</button></li>`).join("")
-  }</ul>
-  <h2 style="margin-top:32px">AI settings</h2>
+  app.innerHTML=`<h2>Settings</h2>
+  <h2 style="margin-top:20px;font-size:20px">AI settings</h2>
   <p class="sub">Your Anthropic API key stays on this phone only. Get one at console.anthropic.com.</p>
   <textarea id="key" style="min-height:60px" placeholder="sk-ant-...">${S.key||""}</textarea>
   <p class="sub" style="margin:10px 0 4px">Model</p>
@@ -1660,7 +1667,6 @@ function browse(){
   <p class="sub" style="margin-top:24px">${S.gen.length} AI-generated questions in your bank.</p>
   <button class="btn ghost" id="cleargen">Delete AI questions</button>
   <button class="btn ghost" id="reset">Reset all progress</button>`;
-  app.querySelectorAll("[data-id]").forEach(b=>b.onclick=()=>lesson(LESSONS.find(l=>l.id===b.dataset.id)));
   $("savegoal").onclick=()=>{S.examDate=$("exam").value;S.goal=+$("goal").value||20;save();home()};
   $("hide").onchange=e=>{S.hideOpts=e.target.checked;save()};
   $("exp").onclick=()=>{const copy={...S};delete copy.key;const blob=new Blob([JSON.stringify(copy)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="ea-part1-backup-"+new Date().toISOString().slice(0,10)+".json";a.click()};
@@ -1673,7 +1679,7 @@ function browse(){
 
 /* ---- AI question generator ---- */
 function generate(){
-  if(!S.key){app.innerHTML=`<h2>Add your API key first</h2><p class="sub">Go to Lessons & settings and paste your Anthropic API key. It's stored only on this device.</p><button class="btn primary" id="go">Open settings</button>`;$("go").onclick=browse;return}
+  if(!S.key){app.innerHTML=`<h2>Add your API key first</h2><p class="sub">Go to Settings and paste your Anthropic API key. It's stored only on this device.</p><button class="btn primary" id="go">Open settings</button>`;$("go").onclick=browse;return}
   const counts=S.gen.reduce((m,q)=>{m[q.topic]=(m[q.topic]||0)+1;return m},{});
   app.innerHTML=`<h2>New AI questions</h2><p class="sub">Pick a Part 1 topic. Fresh scenarios every time, explained in plain language.</p>
     <p class="sub" style="margin-bottom:4px">Topic</p>
